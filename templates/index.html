@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='index.css') }}">
+    <title>PCB DEFECT DETECTION</title>
+</head>
+<body>
+    <div class="logo">    
+        <img src="/static/logome.png" alt="Logo">
+        <h1>PCB DEFECT DETECTION</h1>
+    </div>
+        
+    <div class="container">
+        <div class="detected-container">
+            <!-- Display uploaded image if it exists -->
+            {% if img_path %}
+            <div class="detect">
+                <h2>Detected Image</h2>
+            </div>
+            <div class="image-box">
+                <img src="{{ img_path }}" alt="Detected Image">
+            </div>
+            {% else %}
+            <div class="image-box">
+                <p>No image uploaded</p>
+            </div>
+            {% endif %}
+
+            <!-- Form for file upload -->
+            <div class="from-file-btn">
+                <form action="/predict" method="POST" enctype="multipart/form-data">
+                    <input type="file" name="image" id="file-input" accept="image/*" capture="camera">
+                    <label for="file-input" class="file-label">Choose file</label>
+                    <button type="submit" class="btn">Predict</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Display cropped images if available -->
+        <div class="cropped-container">
+            {% if cropped_images %}
+            <h2>Cropped Images and Predictions</h2>
+            {% for crop, detail in zip(cropped_images, details) %}
+            <div class="cropped-image-wrapper">
+                <img src="{{ crop }}" alt="Cropped PCB">
+                <div class="prediction-text">
+                    Predicted: {{ detail.class }} (Confidence: {{ detail.confidence | round(2) }}%)
+                </div>
+            </div>
+            {% endfor %}
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>
