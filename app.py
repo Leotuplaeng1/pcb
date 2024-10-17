@@ -1,5 +1,5 @@
 from flask import Flask, request, render_template, jsonify
-import requests
+from inference_sdk import InferenceHTTPClient
 from PIL import Image, ImageDraw, ImageFont
 import io
 import os
@@ -7,7 +7,7 @@ import os
 app = Flask(__name__)
 
 # ตั้งค่าการเชื่อมต่อกับ Roboflow ผ่าน InferenceHTTPClient
-CLIENT = request(
+CLIENT = InferenceHTTPClient(
     api_url="https://detect.roboflow.com",
     api_key="DinIFQuB3og5F3IQzf6e"
 )
@@ -38,38 +38,26 @@ def predict():
     image.save("uploaded_image.jpg")
 
     try:
-        # ส่งไปยัง Roboflow API ผ่าน requests
-        with open("uploaded_image.jpg", "rb") as img_file:
-            response = requests.post(
-                ROBOFLOW_API_URL,
-                headers={
-                    "Authorization": f"Bearer {ROBOFLOW_API_KEY}"
-                },
-                files={"file": img_file}
-            )
+        # ส่งไปยัง Roboflow API ผ่าน InferenceHTTPClient
+        result = CLIENT.infer("uploaded_image.jpg", model_id=MODEL_ID)
 
-        # ตรวจสอบว่าได้ผลลัพธ์หรือไม่
-        if response.status_code == 200:
-            result = response.json()
+        # ตรวจสอบว่ามีการตรวจจับหรือไม่
+        if 'predictions' in result:
+            details = result['predictions']  # ดึงข้อมูลเกี่ยวกับสิวที่ตรวจจับได้
+            img_with_boxes, cropped_acnes = draw_boxes_and_crop("uploaded_image.jpg", details)
+            img_with_boxes_path = 'static/detected_image.jpg'
+            img_with_boxes.save(img_with_boxes_path)
 
-            if 'predictions' in result:
-                details = result['predictions']  # ดึงข้อมูลเกี่ยวกับสิวที่ตรวจจับได้
-                img_with_boxes, cropped_acnes = draw_boxes_and_crop("uploaded_image.jpg", details)
-                img_with_boxes_path = 'static/detected_image.jpg'
-                img_with_boxes.save(img_with_boxes_path)
+            # บันทึกรูปที่ crop แยกออกมา
+            cropped_paths = []
+            for i, crop in enumerate(cropped_acnes):
+                crop_path = f'static/cropped_acne_{i}.jpg'
+                crop.save(crop_path)
+                cropped_paths.append(crop_path)
 
-                # บันทึกรูปที่ crop แยกออกมา
-                cropped_paths = []
-                for i, crop in enumerate(cropped_acnes):
-                    crop_path = f'static/cropped_acne_{i}.jpg'
-                    crop.save(crop_path)
-                    cropped_paths.append(crop_path)
-
-                return render_template('index.html', img_path=img_with_boxes_path, details=details, cropped_images=cropped_paths)
-            else:
-                return jsonify({'error': 'No predictions found in the result'}), 500
+            return render_template('index.html', img_path=img_with_boxes_path, details=details, cropped_images=cropped_paths)
         else:
-            return jsonify({'error': f"Failed to get predictions, status code: {response.status_code}"}), 500
+            return jsonify({'error': 'No predictions found in the result'}), 500
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -102,12 +90,10 @@ def draw_boxes_and_crop(image_path, predictions):
 
             # Crop บริเวณที่ตรวจจับสิวและปรับขนาดให้ใหญ่ขึ้น
             cropped_acne = image.crop((left, top, right, bottom))
-            cropped_acne = cropped_acne.resize((100, 100))  # ปรับขนาดเป็น 100x100
+            cropped_acne = cropped_acne.resize((100, 100))  # ปรับขนาดเป็น 300x300
             cropped_acnes.append(cropped_acne)
 
     return image, cropped_acnes
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))  # ใช้ค่า PORT จาก Heroku ถ้ามี
-    app.run(debug=True, host='0.0.0.0', port=port)
-
+    app.run(debug=True, host='0.0.0.0', port=5002)  # Allow external connections
